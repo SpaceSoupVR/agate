@@ -1,0 +1,506 @@
+AGATE — IMMEDIATE-MODE UI LIBRARY
+API & FILE OVERVIEW
+==================================================
+
+Agate is an immediate-mode UI library built on top of space_soup's
+ui2d overlay system. Each frame, you call widget functions in
+sequence; they push (Area, Item) pairs into an internal buffer and
+return interaction results (clicked, new value, etc). At the end of
+the frame, Ui::finish() drains that buffer for the renderer.
+
+The crate is split into 5 files:
+
+  lib.rs         - crate root, re-exports, doc overview
+  theme.rs       - design tokens (colors, sizes, typography) + Theme
+  input.rs       - per-frame input snapshot (UiInput) fed to Ui
+  widgets.rs     - the Ui context + every widget function
+  text_editor.rs - standalone multi-line code/text editor widget
+
+Coordinate convention: every Rect is [x, y, w, h] in PHYSICAL PIXELS
+(the same space ui2d::Overlay uses). Theme::px(points) converts
+logical points (Apple HIG-style) into physical pixels for HiDPI
+screens.
+
+==================================================
+1. lib.rs
+==================================================
+
+Purpose:
+  Crate root. Declares the module tree, re-exports the public surface,
+  and re-exports a few ui2d types so consumers don't need ui2d as a
+  direct dependency just to call overlay.set_items().
+
+Modules declared:
+  pub mod theme;
+  pub mod text_editor;
+  pub mod input;
+  pub mod widgets;
+
+Re-exports:
+  Theme                          (from theme.rs)
+  TextEditor                     (from text_editor.rs)
+  UiInput, MouseButton (as AMouseButton)  (from input.rs)
+  Ui, WidgetId                   (from widgets.rs)
+  Area, Item, Color, Font, Align (from space_soup::ui2d, convenience
+                                   re-export)
+
+Typical usage shown in the doc comment:
+  let mut ui = Ui::new(scale_factor, font);     // once
+  ui.begin_frame(width, height, &mouse_input);  // every frame
+  if ui.button([20.0, 20.0, 120.0, 36.0], "Click me") { ... }
+  overlay.set_items(ui.finish());
+
+Notes:
+  - No logic lives here; it's purely organizational/documentation.
+
+==================================================
+2. theme.rs
+==================================================
+
+Purpose:
+  Central source of truth for all visual design tokens — colors,
+  spacing, corner radii, font sizes, and control dimensions. Also
+  defines Theme, the per-frame scale wrapper that converts logical
+  points into physical pixels.
+
+Color palette (space_soup::ui2d::Color, via local helper `c(r,g,b,a)`):
+  Chrome:     BG, SURFACE, SURFACE_RAISED, BORDER, SEPARATOR
+  Controls:   CONTROL_BG, CONTROL_HOVER, CONTROL_ACTIVE, CONTROL_BORDER
+  Fields:     FIELD_BG, FIELD_BORDER, FIELD_FOCUS, CARET, SELECTION_BG
+  Accent:     ACCENT, ACCENT_HI, ACCENT_DIM, SUCCESS, WARNING, DANGER,
+              DANGER_BG
+  Text:       TEXT_PRIMARY, TEXT_SECONDARY, TEXT_DISABLED,
+              TEXT_ON_ACCENT, TEXT_LINK
+  Editor:     EDITOR_BG, GUTTER_BG, CURRENT_LINE, LINE_NUMBER,
+              LINE_NUMBER_CUR, SCROLLBAR  (Xcode Default Dark-inspired)
+  Shell:      TITLEBAR_BG, TOOLBAR_BG, SIDEBAR_BG, STATUSBAR_BG
+  Syntax:     SYN_PLAIN, SYN_STRING, SYN_NUMBER, SYN_KEYWORD, SYN_KEY,
+              SYN_PUNCT, SYN_COMMENT  (used by JSON highlighter in
+              text_editor.rs)
+
+Typography constants (in points, prefixed PT_):
+  PT_DISPLAY (28), PT_TITLE (20), PT_HEADING (16), PT_BODY (13),
+  PT_SMALL (11), PT_EDITOR (12), PT_EDITOR_LH (17, line-height)
+
+Geometry constants (in points):
+  CORNER / CORNER_SM / CORNER_LG, PAD / PAD_SM, ROW_H, BTN_H, FIELD_H,
+  SLIDER_TRACK, SLIDER_THUMB, TOGGLE_W / TOGGLE_H, CHECK_BOX
+
+Theme struct:
+  pub struct Theme { pub scale: f32 }
+
+  Theme::new(scale)   - clamps scale to a minimum of 0.25
+  Theme::px(points)   - points * scale -> physical pixels
+  Theme::font(points) - alias of px(), used for font sizes
+  Theme::body()       - PT_BODY in physical pixels
+  Theme::small()      - PT_SMALL in physical pixels
+  Default for Theme   - scale = 1.0
+
+Notes:
+  - Every widget in widgets.rs and text_editor.rs pulls its colors and
+    sizes from this file rather than hardcoding values, so palette or
+    density changes propagate everywhere.
+
+==================================================
+3. input.rs
+==================================================
+
+Purpose:
+  Defines the per-frame input snapshot that the caller assembles from
+  their windowing/event library (winit, OpenXR, etc.) and feeds into
+  Ui::begin_frame(). Keeps Agate decoupled from any specific event
+  source.
+
+MouseButton enum:
+  Left, Right, Middle
+
+UiInput struct (Clone, Debug, Default):
+  mouse_pos:      (f32, f32)        - cursor position, physical pixels
+  mouse_held:     Vec<MouseButton>  - buttons held this frame
+  mouse_pressed:  Vec<MouseButton>  - buttons that went down this frame
+  mouse_released: Vec<MouseButton>  - buttons that went up this frame
+  scroll_y:       f32               - scroll delta, logical lines
+  text:           String            - decoded characters typed this frame
+  keys:           Vec<NamedKey>     - non-printable key events
+  cmd:            bool              - Cmd (macOS) / Ctrl held
+  shift:          bool              - Shift held
+  alt:            bool              - Alt/Option held
+  dt:             f32               - seconds since previous frame
+
+UiInput methods:
+  left_just_pressed()  -> bool   (Left in mouse_pressed)
+  left_just_released() -> bool   (Left in mouse_released)
+  left_held()           -> bool   (Left in mouse_held)
+
+NamedKey enum:
+  ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Home, End, PageUp,
+  PageDown, Backspace, Delete, Enter, Tab, Escape
+
+Notes:
+  - Widgets in widgets.rs only ever read self.input; UiInput itself
+    has no behavior beyond the three convenience bool checks above.
+  - text_editor.rs does NOT consume UiInput directly — its keyboard
+    handling is done via explicit method calls (insert_char,
+    backspace, move_left, etc.) that the caller invokes after
+    inspecting UiInput/NamedKey themselves.
+
+==================================================
+4. widgets.rs
+==================================================
+
+Purpose:
+  The heart of the library. Defines the Ui context (the thing you keep
+  alive across frames) and every stateless-from-the-caller widget
+  function. Also holds the low-level shape-pushing and color helper
+  functions shared by all widgets.
+
+Key types:
+  pub type Rect = [f32; 4];   // [x, y, w, h], physical pixels
+
+  WidgetId(pub u64)
+    - Identifier for widgets that need persistent state across frames
+      (sliders, dropdowns, text inputs, drag fields, scroll areas).
+    - WidgetId::of(label: &str) hashes a string (FNV-1a-style) into an
+      id, so you can derive ids from stable labels instead of managing
+      counters yourself.
+
+  WidgetState (private, per-WidgetId, stored in a HashMap)
+    - pressed, slider_drag, dropdown_open, scroll_y, text,
+      text_cursor, text_anchor — covers every stateful widget kind in
+      one struct, looked up by WidgetId.
+
+  PendingTooltip (private)
+    - rect + label for a tooltip queued to be drawn on top of
+      everything else at the end of the frame.
+
+  Ui struct (the main context):
+    theme:      Theme
+    font:       Arc<Font>
+    items:      Vec<(Area, Item)>      - this frame's draw list
+    state:      HashMap<WidgetId, WidgetState>  - persists across frames
+    input:      UiInput                - current frame's snapshot
+    win_w/win_h: f32
+    drag_owner: Option<WidgetId>       - which widget owns the active drag
+    focused:    Option<WidgetId>       - which widget has keyboard focus
+    elapsed:    f32                    - accumulated time, for animation
+    tooltip:    Option<PendingTooltip>
+
+Ui lifecycle methods:
+  Ui::new(scale, font)                         - construct once
+  begin_frame(win_w, win_h, input: &UiInput)    - call first each frame;
+                                                   clears items/tooltip,
+                                                   advances elapsed,
+                                                   releases drag_owner
+                                                   on mouse-up
+  finish() -> Vec<(Area, Item)>                 - call last each frame;
+                                                   flushes any pending
+                                                   tooltip on top, then
+                                                   returns the draw list
+
+Private helpers on Ui:
+  draw_tooltip_now()   - renders a queued tooltip as a small rounded
+                          box positioned above its trigger rect
+  state(id)            - get-or-create WidgetState for an id
+  is_hovered(r)         - is mouse_pos inside rect r
+  just_clicked(r)       - was left button just released inside r
+  push_label(...)       - low-level text item push (with optional clip)
+  push_center_label(r,...) - text item centered within rect r
+
+PUBLIC WIDGET API (grouped as in the source):
+
+  Background / structural
+    fill(r, color)                 - flat rect fill
+    panel(r, color)                - rounded rect fill (standard corner)
+    card(r)                        - raised surface + border (large corner)
+    separator(x, y, width)         - horizontal hairline
+    separator_v(x, y, height)      - vertical hairline
+
+  Labels
+    label(x, y, text)                       - body text, primary color
+    label_secondary(x, y, text)             - small text, secondary color
+    label_styled(x, y, text, size, color, max_w, clip) - full control
+    label_clipped(x, y, text, clip)         - body text clipped to rect
+
+  Buttons
+    button(r, label) -> bool              - accent-filled
+    button_secondary(r, label) -> bool    - control-bg outline style
+    button_danger(r, label) -> bool       - danger color
+    button_success(r, label) -> bool      - success color
+    button_styled(r, label, bg, fg) -> bool - base impl; brightens on
+                                               hover, dims while pressed
+    icon_button(r, icon, tooltip) -> bool - secondary-style button that
+                                             also registers a tooltip
+
+  Toggle / checkbox
+    toggle(r, value, label) -> Option<bool>    - pill switch, label to
+                                                  the right
+    checkbox(r, value, label) -> Option<bool>  - square box with a
+                                                  checkmark glyph
+
+  Slider
+    slider(id, r, value, range) -> Option<f32>
+      - horizontal track + thumb; drag state keyed by WidgetId; claims
+        drag_owner on mouse-down inside the rect
+    slider_labeled(id, r, value, range, format) -> Option<f32>
+      - same, plus a live formatted value label on the right
+        (format uses "{}" as the value placeholder)
+
+  Text input
+    text_input(id, r, value, placeholder) -> Option<String>
+      - single-line input with its own cursor + click-to-focus;
+        handles typed chars (input.text) and named keys (Backspace,
+        Delete, ArrowLeft/Right, Home, End); draws a blinking caret
+        when focused; returns Some(new_value) only when changed
+
+  Text editor widget (wraps TextEditor from text_editor.rs)
+    text_editor(r, editor: &mut TextEditor, focused) -> bool
+      - delegates rendering to TextEditor::build_items
+      - routes click (sets selection/cursor via editor.click) and
+        drag (editor.drag_to) and scroll (editor.scroll_by)
+      - returns true on click (so the caller can set focus); the
+        caller is responsible for routing actual key events to the
+        editor's own move_*/insert_*/backspace/etc. methods
+
+  Progress bar
+    progress_bar(r, progress)          - 0.0-1.0 filled bar
+    progress_bar_labeled(r, progress)  - same + centered "NN%" label
+
+  Color swatch
+    color_swatch(r, color) -> bool     - filled swatch, highlighted
+                                          border on hover, true on click
+
+  Spinner / loading indicator
+    spinner(cx, cy, radius)
+      - background ring + a rotating small ellipse outline whose angle
+        is driven by Ui.elapsed (call every frame while active)
+
+  Dropdown
+    dropdown(id, r, selected, options: &[&str]) -> Option<usize>
+      - closed state shows selected label + chevron
+      - click toggles an open option list below the control
+      - clicking an option returns Some(index) and closes the list
+      - clicking outside the control and the list closes it
+
+  Scroll area
+    scroll_area(id, r, content_height) -> (Rect, f32)
+      - draws the surface background, accumulates scroll_y from wheel
+        input while hovered, clamps to [0, content_height - r.h],
+        returns (rect, current_scroll_offset) for the caller to use
+        when positioning child widgets (subtract scroll_y from y)
+    end_scroll_area(id, r, content_height)
+      - draws the vertical scrollbar thumb sized/positioned from the
+        stored scroll_y (no-op if content fits without scrolling)
+
+  Tooltip
+    tooltip(trigger_rect, label)
+      - if the mouse is currently over trigger_rect, queues a tooltip
+        to be drawn at the end of the frame via finish()
+
+  Numeric drag field
+    drag_float(id, r, value, speed, label) -> Option<f32>
+      - Blender/AE-style field: click-drag horizontally to nudge value
+        by dx * speed; shows an optional left-aligned label and a
+        right-aligned formatted value; claims drag_owner like slider
+
+  Tabs
+    tabs(r, selected, labels: &[&str]) -> Option<usize>
+      - equal-width tab strip with hover/selected states, accent
+        underline on the selected tab, bottom separator; returns
+        Some(index) when a non-selected tab is clicked
+
+  Badge / tag
+    badge(r, label, color) - small filled pill with centered label
+
+  List row
+    list_row(r, label, selected) -> bool
+      - selectable row; highlighted background if selected/hovered;
+        returns true on click
+
+  Disclosure triangle
+    disclosure(r, open, label) -> bool
+      - chevron (▾/▸) + label; returns the NEW open state on click,
+        otherwise returns the same `open` value passed in (note: this
+        is a slightly different convention from toggle/checkbox, which
+        return Option<bool>)
+
+Private shape/color helpers (module-level functions, shared by all
+widgets above):
+  push_rect / push_rrect / push_border
+    - push a flat / rounded / rounded-with-stroke rectangle Item
+  push_ellipse_outline / push_ellipse_outline_rotated
+    - push a stroked ellipse, optionally rotated (used by spinner)
+  brighten_color(c, factor) / dim_color(c, factor)
+    - multiply RGB channels by `factor`, clamped to 255 (dim_color is
+      just brighten_color with factor < 1.0)
+
+Private text-metric helpers:
+  byte_idx_of(s, col)        - char column -> byte index, for slicing
+  text_advance_width(s, up_to_col, font, size_px)
+                              - pixel width of a string up to a given
+                                character column (used to place the
+                                text_input caret)
+
+==================================================
+5. text_editor.rs
+==================================================
+
+Purpose:
+  Agate's most complex widget: a self-contained, scrollable multi-line
+  text/code editor buffer with cursor movement, selection, undo/redo,
+  clipboard, and JSON syntax highlighting. Unlike other widgets it is
+  NOT driven through Ui's input plumbing for keyboard events — the
+  caller inspects UiInput/NamedKey themselves and calls the editor's
+  own methods (insert_char, backspace, move_left, etc).
+
+Pos struct:
+  pub struct Pos { pub row: usize, pub col: usize }
+  - char-indexed (not byte-indexed) cursor/selection coordinate
+  - Pos::new(row, col)
+
+Snapshot struct (private):
+  - lines: Vec<String>, cursor: Pos — one entry in the undo/redo stacks
+
+EditorGeom struct:
+  pub struct EditorGeom {
+      rect: (f32,f32,f32,f32), text_x, top_y, char_w, line_h,
+      visible_rows: usize
+  }
+  - cached layout info from the last build_items() call; used to map
+    mouse coordinates back to a Pos (pos_at) and to compute paging
+
+TextEditor struct (persist across frames):
+  path:       Option<PathBuf>     - source file, if loaded from disk
+  lines:      Vec<String>         - buffer contents, one entry per line
+  cursor:     Pos
+  anchor:     Option<Pos>         - selection anchor (None = no selection)
+  scroll_row / scroll_col: usize  - current scroll offsets
+  dirty:      bool                - true if buffer differs from disk
+  clipboard:  String              - internal clipboard (not OS clipboard)
+  undo / redo: Vec<Snapshot>      - undo stack capped at 200 entries
+  last_geom:  Option<EditorGeom>
+  tab_width:  usize                - default 2 (soft tabs, "  ")
+  syntax:     bool                 - JSON highlighting on/off, default true
+
+Construction / persistence:
+  TextEditor::empty()              - single empty line, no path
+  TextEditor::load(path)           - reads file, tabs -> 2 spaces,
+                                      CRLF normalized to LF
+  save() -> io::Result<()>         - writes buffer back to `path` (no-op
+                                      if path is None), clears `dirty`
+  set_text(text)                   - replace entire buffer, resets
+                                      cursor/scroll/undo/redo
+  text() -> String                 - join lines with "\n"
+  file_name() -> String             - basename of path, or "untitled"
+  cursor_line_col() -> (usize,usize) - 1-based (line, col) for display
+  line_count() -> usize
+  has_selection() -> bool
+
+Undo/redo:
+  undo() / redo()                  - swap buffer+cursor with the top of
+                                      the relevant stack, mark dirty,
+                                      re-clamp scroll to the cursor
+  (push_undo is internal; called automatically by every mutating op)
+
+Selection (internal + public):
+  select_all()                      - selects entire buffer
+  selected_text() / delete_selection() - internal helpers used by cut/
+                                          copy/insert/backspace/delete
+
+Editing:
+  insert_str(text)    - deletes any selection first, then inserts
+                         (tabs -> 2 spaces, CRLF stripped); handles
+                         multi-line pastes by splicing new lines in
+  insert_char(ch)      - convenience wrapper around insert_str
+  newline()            - inserts "\n" + auto-indent matching the
+                         current line's leading spaces
+  backspace()          - deletes selection, or one char left, or
+                         joins with the line above at column 0
+  delete_forward()     - deletes selection, or one char right, or
+                         joins with the line below at end of line
+  copy() / cut() / paste() - operate against the internal clipboard
+
+Cursor movement (each takes `extend: bool` for shift-select):
+  move_left / move_right / move_up / move_down
+  move_home   - toggles between first-non-whitespace and column 0
+  move_end
+  page(down, extend) - moves by (visible_rows - 2), uses last_geom
+  scroll_by(rows)     - direct scroll adjustment, clamped to buffer length
+
+Mouse mapping:
+  pos_at(x, y) -> Option<Pos>   - screen coords -> buffer Pos, using
+                                   last_geom; None if outside rect
+  click(x, y, extend)            - sets cursor (and optionally starts/
+                                    extends a selection) from a click
+  drag_to(x, y)                   - extends selection while dragging
+
+Rendering:
+  build_items(rect, theme, font, show_caret, focused, items)
+    - computes/stores EditorGeom for this frame (gutter width sized to
+      digit count, char width from font metrics, visible row count)
+    - re-clamps scroll to keep the cursor visible
+    - draws: background, gutter + divider, per visible line: current-
+      line highlight (if no selection), selection rect spans, line
+      number (highlighted color on the cursor's line), syntax-
+      highlighted or plain text, blinking caret (if focused and no
+      selection); finally a vertical scrollbar thumb if content
+      overflows the visible area
+
+  Caller contract: call build_items() once per frame inside
+  Ui::text_editor (or directly), and separately translate raw key
+  events into calls to the move_*/insert_*/backspace/delete_forward/
+  copy/cut/paste/undo/redo methods above — TextEditor has no built-in
+  dependency on UiInput.
+
+Private rendering helper:
+  push_rect(items, offset, size, color) - same flat-rect Item push as
+                                           in widgets.rs, duplicated
+                                           locally so text_editor.rs has
+                                           no dependency on widgets.rs
+
+Private string helpers:
+  char_len(s)              - char count (not byte length)
+  byte_idx(s, col)          - char column -> byte index
+  substr(s, from, to) / substr_from(s, from) - char-index-based slicing
+  digit_count(n)            - digits needed to print n, min 2 (gutter width)
+
+Private JSON syntax highlighter:
+  Kind enum: Str, Number, Literal, Punct, Ws, Comment, Other
+  Tok struct: { start, end, kind } - one token span over a line's chars
+  tokenize(chars) -> Vec<Tok>
+    - hand-rolled scanner: whitespace runs, quoted strings (with \"
+      escape skipping), "//" line comments, numbers (incl. leading
+      '-', '.', exponent), bare words (true/false/null -> Literal,
+      else Other), single-char punctuation {}[]:, , everything else
+      falls through as Other
+  next_is_colon(toks, from, chars) -> bool
+    - looks ahead past whitespace to decide if a string token is a
+      JSON *key* (followed by ':') vs a *value* string — drives the
+      SYN_KEY vs SYN_STRING color choice
+  highlight_json_line(line, scroll_col, font, font_px) -> Vec<Span>
+    - tokenizes the line, maps each token's Kind to a theme syntax
+      color, clips/skips tokens that are scrolled out of view
+      horizontally, returns one Span per visible token
+  plain_line(line, scroll_col, font, font_px) -> Vec<Span>
+    - non-highlighted fallback: single Span of the visible substring
+      in SYN_PLAIN
+
+==================================================
+CROSS-FILE RELATIONSHIPS (quick map)
+==================================================
+
+  lib.rs
+    re-exports everything below for external consumers
+
+  theme.rs  <───────────────┐
+    (colors, sizes, Theme)  │ used by
+                             │
+  widgets.rs ────────────────┤  draws all "simple" widgets;
+    Ui::text_editor() ───────┼─▶ delegates painting + mouse to
+                             │
+  text_editor.rs ◀───────────┘  TextEditor (owns its own buffer/
+                                  cursor/undo state, independent of Ui)
+
+  input.rs
+    UiInput is consumed by Ui (begin_frame, all widget hit-testing);
+    TextEditor does NOT take UiInput — callers translate key events
+    into explicit TextEditor method calls themselves.

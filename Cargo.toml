@@ -1,0 +1,10 @@
+[package]
+name = "agate"
+version = "0.1.0"
+edition = "2021"
+description = "Immediate-mode UI library built on space_soup's ui2d overlay"
+
+[dependencies]
+space_soup = { path = "../space_soup", features = ["canvas"] }
+space_soup_engine = { path = "../space_soup_engine" }
+glam = "0.27"
