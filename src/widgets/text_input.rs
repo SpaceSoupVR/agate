@@ -173,6 +173,23 @@ impl Ui {
             &mut self.items,
         );
 
+        // Horizontal scrollbar: click or drag anywhere on its track jumps
+        // `scroll_col` proportionally. Checked (and returns early) before the
+        // text-body click/drag below, since the track sits inside `r`'s
+        // bottom strip and would otherwise also be treated as a click in the
+        // text body, moving the caret instead of scrolling.
+        if let Some(h) = editor.last_hscroll {
+            let track = [h.track_x, h.bar_y, h.track_w, h.bar_h];
+            if (self.input.left_just_pressed() || self.input.left_held())
+                && in_rect(self.input.mouse_pos, track)
+            {
+                let (mx, _) = self.input.mouse_pos;
+                let t = ((mx - h.track_x) / h.track_w.max(1.0)).clamp(0.0, 1.0);
+                editor.scroll_col = (t * h.max_scroll_col as f32).round() as usize;
+                return true;
+            }
+        }
+
         if self.input.left_just_pressed() && in_rect(self.input.mouse_pos, r) {
             let (mx, my) = self.input.mouse_pos;
             editor.click(mx, my, self.input.shift);

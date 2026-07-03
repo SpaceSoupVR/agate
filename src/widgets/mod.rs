@@ -190,6 +190,15 @@ impl Ui {
         push_border(&mut self.items, r, t.px(theme::CORNER_LG), theme::BORDER, t.px(1.0));
     }
 
+    /// Like `card`, but with a caller-chosen fill color instead of the fixed
+    /// `SURFACE` — fill and border share `CORNER_LG` so they align exactly,
+    /// unlike combining `panel` (smaller `CORNER` radius) with `card_border`.
+    pub fn panel_bordered(&mut self, r: Rect, color: Color) {
+        let t = &self.theme;
+        push_rrect(&mut self.items, r, t.px(theme::CORNER_LG), color);
+        push_border(&mut self.items, r, t.px(theme::CORNER_LG), theme::BORDER, t.px(1.0));
+    }
+
     pub fn card_border(&mut self, r: Rect) {
         let t = &self.theme;
         push_border(&mut self.items, r, t.px(theme::CORNER_LG), theme::BORDER, t.px(1.0));

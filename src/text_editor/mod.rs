@@ -28,6 +28,19 @@ pub struct EditorGeom {
     pub visible_rows: usize,
 }
 
+/// Geometry of the horizontal scrollbar track, recomputed in `build_items`
+/// whenever a line is wider than the viewport — lets `text_editor()` turn
+/// clicks/drags on the track into a `scroll_col` jump, since Shift+wheel is
+/// the only other way to pan a long line into view and isn't discoverable.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct HScrollGeom {
+    pub track_x: f32,
+    pub track_w: f32,
+    pub bar_y: f32,
+    pub bar_h: f32,
+    pub max_scroll_col: usize,
+}
+
 pub(crate) const TAB_STR: &str = "  ";
 
 /// How many columns of padding to keep between the caret and the viewport edge.
@@ -47,6 +60,7 @@ pub struct TextEditor {
     pub(crate) undo: Vec<Snapshot>,
     pub(crate) redo: Vec<Snapshot>,
     pub(crate) last_geom: Option<EditorGeom>,
+    pub(crate) last_hscroll: Option<HScrollGeom>,
     pub tab_width: usize,
     pub syntax: bool,
     pub(crate) last_click_at: Option<std::time::Instant>,
@@ -68,6 +82,7 @@ impl TextEditor {
             undo: Vec::new(),
             redo: Vec::new(),
             last_geom: None,
+            last_hscroll: None,
             tab_width: 2,
             syntax: true,
             last_click_at: None,

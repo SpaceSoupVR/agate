@@ -5,7 +5,7 @@ use space_soup::ui2d::{Align, Area, Color, Font, Item, Shape, ShapeType, Span, T
 use crate::theme::{self, Theme};
 
 use super::highlight::{highlight_json_line, plain_line};
-use super::{char_len, digit_count, EditorGeom, TextEditor};
+use super::{char_len, digit_count, EditorGeom, HScrollGeom, TextEditor};
 
 impl TextEditor {
     pub fn build_items(
@@ -189,6 +189,7 @@ impl TextEditor {
         }
 
         // ── Horizontal scrollbar ─────────────────────────────────────────────
+        self.last_hscroll = None;
         if needs_hscroll {
             let bar_y = ry + rh - h_scrollbar_h;
             // Track background
@@ -205,6 +206,14 @@ impl TextEditor {
                 (rw - gutter_w, theme.px(1.0)),
                 theme::BORDER,
             );
+
+            self.last_hscroll = Some(HScrollGeom {
+                track_x: rx + gutter_w,
+                track_w: rw - gutter_w,
+                bar_y,
+                bar_h: h_scrollbar_h,
+                max_scroll_col,
+            });
 
             let track_w = rw - gutter_w - theme.px(8.0);
             let visible_cols = (text_viewport_w / char_w).floor() as usize;
