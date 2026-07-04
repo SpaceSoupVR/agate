@@ -152,8 +152,6 @@ impl TextEditor {
         Some(if a <= b { (a, b) } else { (b, a) })
     }
 
-    pub(crate) fn clear_selection(&mut self) { self.anchor = None; }
-
     pub(crate) fn begin_selection(&mut self, extend: bool) {
         if extend {
             if self.anchor.is_none() { self.anchor = Some(self.cursor); }

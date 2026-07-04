@@ -103,7 +103,6 @@ impl TextEditor {
                     let vis_ec = ec.saturating_sub(self.scroll_col);
                     let sx = text_x + vis_sc as f32 * char_w;
                     let ex = text_x + vis_ec as f32 * char_w;
-                    let w = (ex - sx).max(char_w * 0.35);
 
                     // Only draw if selection is within text viewport
                     let clip_right = rx + rw;

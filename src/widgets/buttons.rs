@@ -38,6 +38,16 @@ impl Ui {
         clicked
     }
 
+    /// Like `button_styled`, but with no hover/press feedback and no click
+    /// detection — for a control that's shown but currently can't be
+    /// activated (e.g. "Undo" with an empty history), so it doesn't
+    /// visually invite a click it will then ignore.
+    pub fn button_disabled(&mut self, r: Rect, label: &str, bg: Color, fg: Color) {
+        let t = &self.theme;
+        push_rrect(&mut self.items, r, t.px(theme::CORNER), bg);
+        self.push_center_label(r, label, t.body(), fg);
+    }
+
     pub fn icon_button(&mut self, r: Rect, icon: &str, tooltip: Option<&str>) -> bool {
         let clicked = self.button_secondary(r, icon);
         if let Some(tip) = tooltip {

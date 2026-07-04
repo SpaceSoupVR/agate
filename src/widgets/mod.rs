@@ -16,12 +16,12 @@ mod text_input;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use space_soup::ui2d::{Align, Area, Color, Font, Item, Shape, ShapeType, Span, Text};
+use space_soup::ui2d::{Align, Area, Color, Font, Item, Span, Text};
 
 use crate::input::UiInput;
 use crate::theme::{self, Theme};
 
-use draw::{push_border, push_rect, push_rrect};
+use draw::{push_border, push_rect, push_rrect, push_rrect_clipped};
 
 pub type Rect = [f32; 4];
 
@@ -45,7 +45,6 @@ impl WidgetId {
 
 #[derive(Default)]
 pub(crate) struct WidgetState {
-    pub(crate) pressed: bool,
     pub(crate) slider_drag: Option<(f32, f32)>,
     pub(crate) dropdown_open: bool,
     pub(crate) scroll_y: f32,
@@ -133,11 +132,7 @@ impl Ui {
         );
     }
 
-    pub(crate) fn state(&mut self, id: WidgetId) -> &mut WidgetState {
-        self.state.entry(id).or_default()
-    }
-
-    pub(crate) fn is_hovered(&self, r: Rect) -> bool {
+    pub fn is_hovered(&self, r: Rect) -> bool {
         in_rect(self.input.mouse_pos, r)
     }
 
@@ -182,6 +177,14 @@ impl Ui {
     pub fn panel(&mut self, r: Rect, color: Color) {
         let radius = self.theme.px(theme::CORNER);
         push_rrect(&mut self.items, r, radius, color);
+    }
+
+    /// Like `panel`, but clamped to `clip` (when given) — used for panels
+    /// inside a scrollable area, where a row near the container's edge must
+    /// not paint over whatever sits just outside it.
+    pub fn panel_clipped(&mut self, r: Rect, color: Color, clip: Option<Rect>) {
+        let radius = self.theme.px(theme::CORNER);
+        push_rrect_clipped(&mut self.items, r, radius, color, clip);
     }
 
     pub fn card(&mut self, r: Rect) {
