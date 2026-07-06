@@ -2,7 +2,9 @@ use space_soup::ui2d::{Align, Color};
 
 use crate::theme;
 
-use super::draw::{brighten_color, dim_color, push_rect, push_rect_clipped, push_rrect, push_border};
+use super::draw::{
+    brighten_color, dim_color, push_border, push_rect, push_rect_clipped, push_rrect,
+};
 use super::{Rect, Ui};
 
 impl Ui {
@@ -28,9 +30,13 @@ impl Ui {
         let pressing = hovered && self.input.left_held();
         let clicked = self.just_clicked(r);
 
-        let bg = if pressing { dim_color(bg, 0.80) }
-                 else if hovered { brighten_color(bg, 1.08) }
-                 else { bg };
+        let bg = if pressing {
+            dim_color(bg, 0.80)
+        } else if hovered {
+            brighten_color(bg, 1.08)
+        } else {
+            bg
+        };
 
         push_rrect(&mut self.items, r, t.px(theme::CORNER), bg);
         let font_px = t.body();
@@ -38,10 +44,6 @@ impl Ui {
         clicked
     }
 
-    /// Like `button_styled`, but with no hover/press feedback and no click
-    /// detection — for a control that's shown but currently can't be
-    /// activated (e.g. "Undo" with an empty history), so it doesn't
-    /// visually invite a click it will then ignore.
     pub fn button_disabled(&mut self, r: Rect, label: &str, bg: Color, fg: Color) {
         let t = &self.theme;
         push_rrect(&mut self.items, r, t.px(theme::CORNER), bg);
@@ -52,7 +54,10 @@ impl Ui {
         let clicked = self.button_secondary(r, icon);
         if let Some(tip) = tooltip {
             if self.is_hovered(r) {
-                self.tooltip = Some(super::PendingTooltip { rect: r, label: tip.to_string() });
+                self.tooltip = Some(super::PendingTooltip {
+                    rect: r,
+                    label: tip.to_string(),
+                });
             }
         }
         clicked
@@ -64,18 +69,39 @@ impl Ui {
         let new_val = if clicked { Some(!value) } else { None };
         let current = new_val.unwrap_or(value);
 
-        let track_color = if current { theme::ACCENT } else { theme::CONTROL_BG };
+        let track_color = if current {
+            theme::ACCENT
+        } else {
+            theme::CONTROL_BG
+        };
         push_rrect(&mut self.items, r, r[3] * 0.5, track_color);
 
         let thumb_d = r[3] - t.px(4.0);
-        let thumb_x = if current { r[0] + r[2] - thumb_d - t.px(2.0) } else { r[0] + t.px(2.0) };
+        let thumb_x = if current {
+            r[0] + r[2] - thumb_d - t.px(2.0)
+        } else {
+            r[0] + t.px(2.0)
+        };
         let thumb_y = r[1] + t.px(2.0);
-        push_rrect(&mut self.items, [thumb_x, thumb_y, thumb_d, thumb_d], thumb_d * 0.5, theme::TEXT_ON_ACCENT);
+        push_rrect(
+            &mut self.items,
+            [thumb_x, thumb_y, thumb_d, thumb_d],
+            thumb_d * 0.5,
+            theme::TEXT_ON_ACCENT,
+        );
 
         if !label.is_empty() {
             let lx = r[0] + r[2] + t.px(theme::PAD_SM);
             let ly = r[1] + (r[3] - t.body()) * 0.5;
-            self.push_label((lx, ly), label, t.body(), theme::TEXT_PRIMARY, Align::Left, 400.0, None);
+            self.push_label(
+                (lx, ly),
+                label,
+                t.body(),
+                theme::TEXT_PRIMARY,
+                Align::Left,
+                400.0,
+                None,
+            );
         }
         new_val
     }
@@ -89,9 +115,19 @@ impl Ui {
         let new_val = if clicked { Some(!value) } else { None };
         let current = new_val.unwrap_or(value);
 
-        let bg = if current { theme::ACCENT } else { theme::FIELD_BG };
+        let bg = if current {
+            theme::ACCENT
+        } else {
+            theme::FIELD_BG
+        };
         push_rrect(&mut self.items, box_r, t.px(theme::CORNER_SM), bg);
-        push_border(&mut self.items, box_r, t.px(theme::CORNER_SM), theme::FIELD_BORDER, t.px(1.0));
+        push_border(
+            &mut self.items,
+            box_r,
+            t.px(theme::CORNER_SM),
+            theme::FIELD_BORDER,
+            t.px(1.0),
+        );
 
         if current {
             self.push_center_label(box_r, "\u{2713}", t.body(), theme::TEXT_ON_ACCENT);
@@ -100,7 +136,15 @@ impl Ui {
         if !label.is_empty() {
             let lx = r[0] + side + t.px(theme::PAD_SM);
             let ly = r[1] + (r[3] - t.body()) * 0.5;
-            self.push_label((lx, ly), label, t.body(), theme::TEXT_PRIMARY, Align::Left, 400.0, None);
+            self.push_label(
+                (lx, ly),
+                label,
+                t.body(),
+                theme::TEXT_PRIMARY,
+                Align::Left,
+                400.0,
+                None,
+            );
         }
         new_val
     }
@@ -115,24 +159,41 @@ impl Ui {
         self.list_row_clipped(r, label, selected, None)
     }
 
-    /// Same as `list_row`, but the row's background and label are clamped
-    /// to `clip` (when given) — used for scrollable lists like the
-    /// navigator, where a row near the edge of its container must not
-    /// paint over whatever sits just outside that container (e.g. a fixed
-    /// footer panel below it).
-    pub fn list_row_clipped(&mut self, r: Rect, label: &str, selected: bool, clip: Option<Rect>) -> bool {
+    pub fn list_row_clipped(
+        &mut self,
+        r: Rect,
+        label: &str,
+        selected: bool,
+        clip: Option<Rect>,
+    ) -> bool {
         let t = self.theme;
         let hov = self.is_hovered(r);
-        let bg = if selected { theme::ACCENT_DIM }
-                 else if hov { theme::CONTROL_HOVER }
-                 else { Color(0, 0, 0, 0) };
+        let bg = if selected {
+            theme::ACCENT_DIM
+        } else if hov {
+            theme::CONTROL_HOVER
+        } else {
+            Color(0, 0, 0, 0)
+        };
         push_rect_clipped(&mut self.items, r, bg, clip);
 
-        let fg = if selected { theme::ACCENT_HI } else { theme::TEXT_PRIMARY };
+        let fg = if selected {
+            theme::ACCENT_HI
+        } else {
+            theme::TEXT_PRIMARY
+        };
         let lx = r[0] + t.px(theme::PAD);
         let ly = r[1] + (r[3] - t.body()) * 0.5;
         let bounds = clip.map(|c| (c[0], c[1], c[0] + c[2], c[1] + c[3]));
-        self.push_label((lx, ly), label, t.body(), fg, Align::Left, r[2] - t.px(theme::PAD * 2.0), bounds);
+        self.push_label(
+            (lx, ly),
+            label,
+            t.body(),
+            fg,
+            Align::Left,
+            r[2] - t.px(theme::PAD * 2.0),
+            bounds,
+        );
         self.just_clicked(r)
     }
 
@@ -141,12 +202,32 @@ impl Ui {
         let chevron = if open { "\u{25be}" } else { "\u{25b8}" };
         let ch_x = r[0] + t.px(4.0);
         let cy = r[1] + (r[3] - t.body()) * 0.5;
-        self.push_label((ch_x, cy), chevron, t.body(), theme::TEXT_SECONDARY, Align::Left, t.px(16.0), None);
+        self.push_label(
+            (ch_x, cy),
+            chevron,
+            t.body(),
+            theme::TEXT_SECONDARY,
+            Align::Left,
+            t.px(16.0),
+            None,
+        );
 
         let lx = r[0] + t.px(20.0);
-        self.push_label((lx, cy), label, t.body(), theme::TEXT_PRIMARY, Align::Left, r[2] - t.px(24.0), None);
+        self.push_label(
+            (lx, cy),
+            label,
+            t.body(),
+            theme::TEXT_PRIMARY,
+            Align::Left,
+            r[2] - t.px(24.0),
+            None,
+        );
 
-        if self.just_clicked(r) { !open } else { open }
+        if self.just_clicked(r) {
+            !open
+        } else {
+            open
+        }
     }
 
     pub fn tabs(&mut self, r: Rect, selected: usize, labels: &[&str]) -> Option<usize> {
@@ -159,23 +240,44 @@ impl Ui {
             let tab_r = [r[0] + i as f32 * tab_w, r[1], tab_w, r[3]];
             let sel = i == selected;
             let hov = self.is_hovered(tab_r);
-            let bg = if sel { theme::CONTROL_BG } else if hov { theme::CONTROL_ACTIVE } else { Color(0, 0, 0, 0) };
+            let bg = if sel {
+                theme::CONTROL_BG
+            } else if hov {
+                theme::CONTROL_ACTIVE
+            } else {
+                Color(0, 0, 0, 0)
+            };
             push_rrect(&mut self.items, tab_r, t.px(theme::CORNER_SM), bg);
 
-            let fg = if sel { theme::TEXT_PRIMARY } else { theme::TEXT_SECONDARY };
+            let fg = if sel {
+                theme::TEXT_PRIMARY
+            } else {
+                theme::TEXT_SECONDARY
+            };
             self.push_center_label(tab_r, label, t.body(), fg);
 
             if sel {
                 push_rect(
                     &mut self.items,
-                    [tab_r[0] + t.px(8.0), tab_r[1] + tab_r[3] - t.px(2.0), tab_w - t.px(16.0), t.px(2.0)],
+                    [
+                        tab_r[0] + t.px(8.0),
+                        tab_r[1] + tab_r[3] - t.px(2.0),
+                        tab_w - t.px(16.0),
+                        t.px(2.0),
+                    ],
                     theme::ACCENT,
                 );
             }
-            if self.just_clicked(tab_r) && !sel { result = Some(i); }
+            if self.just_clicked(tab_r) && !sel {
+                result = Some(i);
+            }
         }
 
-        push_rect(&mut self.items, [r[0], r[1] + r[3] - t.px(1.0), r[2], t.px(1.0)], theme::BORDER);
+        push_rect(
+            &mut self.items,
+            [r[0], r[1] + r[3] - t.px(1.0), r[2], t.px(1.0)],
+            theme::BORDER,
+        );
         result
     }
 }

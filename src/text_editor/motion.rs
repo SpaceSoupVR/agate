@@ -1,8 +1,6 @@
-use super::{char_len, TextEditor, Pos};
+use super::{char_len, Pos, TextEditor};
 
 impl TextEditor {
-    // ── Basic movement ───────────────────────────────────────────────────────
-
     pub fn move_left(&mut self, extend: bool) {
         self.begin_selection(extend);
         if self.cursor.col > 0 {
@@ -46,13 +44,12 @@ impl TextEditor {
         self.ensure_visible_default();
     }
 
-    // ── Home / End ───────────────────────────────────────────────────────────
-
-    /// Move to first non-whitespace character on the line; if already there, go to col 0.
     pub fn move_home(&mut self, extend: bool) {
         self.begin_selection(extend);
         let indent: usize = self.lines[self.cursor.row]
-            .chars().take_while(|c| *c == ' ').count();
+            .chars()
+            .take_while(|c| *c == ' ')
+            .count();
         self.cursor.col = if self.cursor.col == indent { 0 } else { indent };
         self.ensure_col_visible();
     }
@@ -62,8 +59,6 @@ impl TextEditor {
         self.cursor.col = char_len(&self.lines[self.cursor.row]);
         self.ensure_col_visible();
     }
-
-    // ── File start / end ─────────────────────────────────────────────────────
 
     pub fn move_file_start(&mut self, extend: bool) {
         self.begin_selection(extend);
@@ -79,8 +74,6 @@ impl TextEditor {
         self.cursor = Pos::new(row, col);
         self.ensure_visible_default();
     }
-
-    // ── Page Up / Down ───────────────────────────────────────────────────────
 
     pub fn page_up(&mut self, extend: bool) {
         self.begin_selection(extend);
@@ -102,8 +95,6 @@ impl TextEditor {
         self.ensure_visible_default();
     }
 
-    // ── Word movement ────────────────────────────────────────────────────────
-
     pub fn move_word_left(&mut self, extend: bool) {
         self.begin_selection(extend);
         if self.cursor.col == 0 {
@@ -114,10 +105,14 @@ impl TextEditor {
         } else {
             let chars: Vec<char> = self.lines[self.cursor.row].chars().collect();
             let mut col = self.cursor.col;
-            // Skip trailing spaces
-            while col > 0 && chars[col - 1] == ' ' { col -= 1; }
-            // Skip word chars
-            while col > 0 && chars[col - 1] != ' ' { col -= 1; }
+
+            while col > 0 && chars[col - 1] == ' ' {
+                col -= 1;
+            }
+
+            while col > 0 && chars[col - 1] != ' ' {
+                col -= 1;
+            }
             self.cursor.col = col;
         }
         self.ensure_visible_default();
@@ -134,23 +129,27 @@ impl TextEditor {
         } else {
             let chars: Vec<char> = self.lines[self.cursor.row].chars().collect();
             let mut col = self.cursor.col;
-            // Skip word chars
-            while col < len && chars[col] != ' ' { col += 1; }
-            // Skip spaces
-            while col < len && chars[col] == ' ' { col += 1; }
+
+            while col < len && chars[col] != ' ' {
+                col += 1;
+            }
+
+            while col < len && chars[col] == ' ' {
+                col += 1;
+            }
             self.cursor.col = col;
         }
         self.ensure_visible_default();
     }
 
-    // ── Click-to-place ───────────────────────────────────────────────────────
-
     pub fn click(&mut self, px: f32, py: f32, extend: bool) {
         let now = std::time::Instant::now();
-        let same_spot = self.last_click_pos
+        let same_spot = self
+            .last_click_pos
             .map(|(lx, ly)| (px - lx).abs() < 4.0 && (py - ly).abs() < 4.0)
             .unwrap_or(false);
-        let quick = self.last_click_at
+        let quick = self
+            .last_click_at
             .map(|t| now.duration_since(t).as_millis() < 400)
             .unwrap_or(false);
 
@@ -174,7 +173,6 @@ impl TextEditor {
         self.ensure_visible_default();
     }
 
-    /// Extend a click-drag: move cursor to the given pixel without resetting click count.
     pub fn drag_to(&mut self, px: f32, py: f32) {
         if self.anchor.is_none() {
             self.anchor = Some(self.cursor);
@@ -185,8 +183,6 @@ impl TextEditor {
         self.ensure_visible_default();
     }
 
-    // ── Word / line selection ─────────────────────────────────────────────────
-
     fn select_word_at_cursor(&mut self) {
         let line = &self.lines[self.cursor.row];
         let chars: Vec<char> = line.chars().collect();
@@ -195,10 +191,13 @@ impl TextEditor {
         let mut start = col;
         let mut end = col;
         if col < chars.len() && is_word(chars[col]) {
-            while start > 0 && is_word(chars[start - 1]) { start -= 1; }
-            while end < chars.len() && is_word(chars[end]) { end += 1; }
+            while start > 0 && is_word(chars[start - 1]) {
+                start -= 1;
+            }
+            while end < chars.len() && is_word(chars[end]) {
+                end += 1;
+            }
         } else if col < chars.len() {
-            // select the single non-word char
             end = col + 1;
         }
         self.anchor = Some(Pos::new(self.cursor.row, start));

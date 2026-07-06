@@ -25,13 +25,16 @@ impl TextEditor {
         let digits = digit_count(self.lines.len());
         let gutter_w = char_w * digits as f32 + theme.px(20.0);
 
-        // Reserve space for horizontal scrollbar at the bottom
         let h_scrollbar_h = theme.px(8.0);
         let max_line_chars = self.lines.iter().map(|l| char_len(l)).max().unwrap_or(0);
         let content_w = max_line_chars as f32 * char_w;
         let text_viewport_w = rw - gutter_w - theme.px(8.0);
         let needs_hscroll = content_w > text_viewport_w;
-        let effective_rh = if needs_hscroll { rh - h_scrollbar_h } else { rh };
+        let effective_rh = if needs_hscroll {
+            rh - h_scrollbar_h
+        } else {
+            rh
+        };
 
         let text_x = rx + gutter_w + theme.px(8.0);
         let top_y = ry + theme.px(6.0);
@@ -47,7 +50,6 @@ impl TextEditor {
         };
         self.last_geom = Some(geom);
 
-        // Clamp scroll positions
         let max_scroll_row = self.lines.len().saturating_sub(1);
         self.scroll_row = self.scroll_row.min(max_scroll_row);
 
@@ -59,7 +61,6 @@ impl TextEditor {
         };
         self.scroll_col = self.scroll_col.min(max_scroll_col);
 
-        // ── Background ──────────────────────────────────────────────────────
         push_rect(items, (rx, ry), (rw, rh), theme::EDITOR_BG);
         push_rect(items, (rx, ry), (gutter_w, rh), theme::GUTTER_BG);
         push_rect(
@@ -72,13 +73,11 @@ impl TextEditor {
         let sel = self.selection_range();
         let last_row = (self.scroll_row + vis_rows).min(self.lines.len());
 
-        // Clip rect for the text area (right of gutter, above h-scrollbar)
         let text_clip = (rx + gutter_w, ry, rx + rw, ry + effective_rh);
 
         for (vi, row) in (self.scroll_row..last_row).enumerate() {
             let ly = top_y + vi as f32 * line_h;
 
-            // Current line highlight (when no selection)
             if sel.is_none() && row == self.cursor.row {
                 push_rect(
                     items,
@@ -88,7 +87,6 @@ impl TextEditor {
                 );
             }
 
-            // Selection highlight
             if let Some((s, e)) = sel {
                 if row >= s.row && row <= e.row {
                     let sc = if row == s.row { s.col } else { 0 };
@@ -98,25 +96,27 @@ impl TextEditor {
                         char_len(&self.lines[row]) + 1
                     };
 
-                    // Clamp selection rect to visible columns
                     let vis_sc = sc.saturating_sub(self.scroll_col);
                     let vis_ec = ec.saturating_sub(self.scroll_col);
                     let sx = text_x + vis_sc as f32 * char_w;
                     let ex = text_x + vis_ec as f32 * char_w;
 
-                    // Only draw if selection is within text viewport
                     let clip_right = rx + rw;
                     if sx < clip_right && ex > text_x - char_w {
                         let clamped_sx = sx.max(rx + gutter_w);
                         let clamped_w = (ex.min(clip_right) - clamped_sx).max(0.0);
                         if clamped_w > 0.0 {
-                            push_rect(items, (clamped_sx, ly), (clamped_w, line_h), theme::SELECTION_BG);
+                            push_rect(
+                                items,
+                                (clamped_sx, ly),
+                                (clamped_w, line_h),
+                                theme::SELECTION_BG,
+                            );
                         }
                     }
                 }
             }
 
-            // Gutter line number
             let num_color = if row == self.cursor.row {
                 theme::LINE_NUMBER_CUR
             } else {
@@ -129,13 +129,11 @@ impl TextEditor {
                     bounds: Some((rx, ry, rx + gutter_w, ry + rh)),
                 },
                 Item::Text(Text::new(
-                    vec![Span::new(num, font.clone(), font_px, num_color)
-                        .with_align(Align::Left)],
+                    vec![Span::new(num, font.clone(), font_px, num_color).with_align(Align::Left)],
                     gutter_w,
                 )),
             ));
 
-            // Line text with horizontal scroll and clipping
             let spans = if self.syntax {
                 highlight_json_line(&self.lines[row], self.scroll_col, font, font_px)
             } else {
@@ -151,11 +149,10 @@ impl TextEditor {
                 ));
             }
 
-            // Caret
             if show_caret && focused && row == self.cursor.row && sel.is_none() {
                 let vis_col = self.cursor.col.saturating_sub(self.scroll_col);
                 let cx = text_x + vis_col as f32 * char_w;
-                // Only render caret if it's inside the text viewport
+
                 if cx >= rx + gutter_w && cx < rx + rw {
                     push_rect(
                         items,
@@ -167,13 +164,15 @@ impl TextEditor {
             }
         }
 
-        // ── Vertical scrollbar ───────────────────────────────────────────────
         if self.lines.len() > vis_rows {
             let track_h = effective_rh - theme.px(8.0);
-            let thumb_h =
-                (track_h * vis_rows as f32 / self.lines.len() as f32).max(theme.px(24.0));
+            let thumb_h = (track_h * vis_rows as f32 / self.lines.len() as f32).max(theme.px(24.0));
             let max_sc = (self.lines.len() - vis_rows) as f32;
-            let t = if max_sc > 0.0 { self.scroll_row as f32 / max_sc } else { 0.0 };
+            let t = if max_sc > 0.0 {
+                self.scroll_row as f32 / max_sc
+            } else {
+                0.0
+            };
             let thumb_y = ry + theme.px(4.0) + t * (track_h - thumb_h);
             items.push((
                 Area {
@@ -181,24 +180,28 @@ impl TextEditor {
                     bounds: None,
                 },
                 Item::Shape(Shape {
-                    shape: ShapeType::RoundedRectangle(0.0, (theme.px(4.0), thumb_h), 0.0, theme.px(2.0)),
+                    shape: ShapeType::RoundedRectangle(
+                        0.0,
+                        (theme.px(4.0), thumb_h),
+                        0.0,
+                        theme.px(2.0),
+                    ),
                     color: theme::SCROLLBAR,
                 }),
             ));
         }
 
-        // ── Horizontal scrollbar ─────────────────────────────────────────────
         self.last_hscroll = None;
         if needs_hscroll {
             let bar_y = ry + rh - h_scrollbar_h;
-            // Track background
+
             push_rect(
                 items,
                 (rx + gutter_w, bar_y),
                 (rw - gutter_w, h_scrollbar_h),
                 theme::GUTTER_BG,
             );
-            // Separator line
+
             push_rect(
                 items,
                 (rx + gutter_w, bar_y),
@@ -246,7 +249,10 @@ impl TextEditor {
 
 fn push_rect(items: &mut Vec<(Area, Item)>, offset: (f32, f32), size: (f32, f32), color: Color) {
     items.push((
-        Area { offset, bounds: None },
+        Area {
+            offset,
+            bounds: None,
+        },
         Item::Shape(Shape {
             shape: ShapeType::Rectangle(0.0, size, 0.0),
             color,

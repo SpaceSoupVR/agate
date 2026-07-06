@@ -14,18 +14,40 @@ impl Ui {
         options: &[&str],
     ) -> Option<usize> {
         let t = self.theme;
-        let open = self.state.get(&id).map(|s| s.dropdown_open).unwrap_or(false);
+        let open = self
+            .state
+            .get(&id)
+            .map(|s| s.dropdown_open)
+            .unwrap_or(false);
         let hovered = self.is_hovered(r);
 
-        let bg = if hovered { theme::CONTROL_HOVER } else { theme::CONTROL_BG };
+        let bg = if hovered {
+            theme::CONTROL_HOVER
+        } else {
+            theme::CONTROL_BG
+        };
         push_rrect(&mut self.items, r, t.px(theme::CORNER), bg);
-        push_border(&mut self.items, r, t.px(theme::CORNER), theme::CONTROL_BORDER, t.px(1.0));
+        push_border(
+            &mut self.items,
+            r,
+            t.px(theme::CORNER),
+            theme::CONTROL_BORDER,
+            t.px(1.0),
+        );
 
         let label = options.get(selected).copied().unwrap_or("\u{2014}");
         let pad = t.px(theme::PAD_SM);
         let font_px = t.body();
         let ly = r[1] + (r[3] - font_px) * 0.5;
-        self.push_label((r[0] + pad, ly), label, font_px, theme::TEXT_PRIMARY, Align::Left, r[2] - pad * 3.0, None);
+        self.push_label(
+            (r[0] + pad, ly),
+            label,
+            font_px,
+            theme::TEXT_PRIMARY,
+            Align::Left,
+            r[2] - pad * 3.0,
+            None,
+        );
 
         let chevron = if open { "\u{25b2}" } else { "\u{25bc}" };
         self.push_label(
@@ -52,20 +74,49 @@ impl Ui {
             let ly = r[1] + r[3];
             let lw = r[2];
 
-            push_rrect(&mut self.items, [lx, ly, lw, list_h], t.px(theme::CORNER), theme::SURFACE_RAISED);
-            push_border(&mut self.items, [lx, ly, lw, list_h], t.px(theme::CORNER), theme::BORDER, t.px(1.0));
+            push_rrect(
+                &mut self.items,
+                [lx, ly, lw, list_h],
+                t.px(theme::CORNER),
+                theme::SURFACE_RAISED,
+            );
+            push_border(
+                &mut self.items,
+                [lx, ly, lw, list_h],
+                t.px(theme::CORNER),
+                theme::BORDER,
+                t.px(1.0),
+            );
 
             for (i, opt) in options.iter().enumerate() {
                 let item_r = [lx, ly + i as f32 * item_h, lw, item_h];
                 let ih = self.is_hovered(item_r);
                 let sel = i == selected;
-                let item_bg = if sel { theme::ACCENT_DIM } else if ih { theme::CONTROL_HOVER } else { Color(0, 0, 0, 0) };
+                let item_bg = if sel {
+                    theme::ACCENT_DIM
+                } else if ih {
+                    theme::CONTROL_HOVER
+                } else {
+                    Color(0, 0, 0, 0)
+                };
                 push_rect(&mut self.items, item_r, item_bg);
 
-                let text_color = if sel { theme::ACCENT_HI } else { theme::TEXT_PRIMARY };
+                let text_color = if sel {
+                    theme::ACCENT_HI
+                } else {
+                    theme::TEXT_PRIMARY
+                };
                 let pad2 = t.px(theme::PAD);
                 let ty = item_r[1] + (item_h - t.body()) * 0.5;
-                self.push_label((item_r[0] + pad2, ty), opt, t.body(), text_color, Align::Left, lw - pad2 * 2.0, None);
+                self.push_label(
+                    (item_r[0] + pad2, ty),
+                    opt,
+                    t.body(),
+                    text_color,
+                    Align::Left,
+                    lw - pad2 * 2.0,
+                    None,
+                );
 
                 if self.just_clicked(item_r) {
                     result = Some(i);
@@ -85,12 +136,7 @@ impl Ui {
         result
     }
 
-    pub fn scroll_area(
-        &mut self,
-        id: WidgetId,
-        r: Rect,
-        content_height: f32,
-    ) -> (Rect, f32) {
+    pub fn scroll_area(&mut self, id: WidgetId, r: Rect, content_height: f32) -> (Rect, f32) {
         let t = self.theme;
         push_rrect(&mut self.items, r, t.px(theme::CORNER), theme::SURFACE);
 
@@ -109,14 +155,11 @@ impl Ui {
         (r, scroll_y)
     }
 
-    pub fn end_scroll_area(
-        &mut self,
-        id: WidgetId,
-        r: Rect,
-        content_height: f32,
-    ) {
+    pub fn end_scroll_area(&mut self, id: WidgetId, r: Rect, content_height: f32) {
         let t = self.theme;
-        if content_height <= r[3] { return; }
+        if content_height <= r[3] {
+            return;
+        }
 
         let scroll_y = self.state.get(&id).map(|s| s.scroll_y).unwrap_or(0.0);
         let track_h = r[3] - t.px(8.0);
@@ -126,7 +169,10 @@ impl Ui {
         let thumb_y = r[1] + t.px(4.0) + frac * (track_h - thumb_h);
 
         self.items.push((
-            Area { offset: (r[0] + r[2] - t.px(8.0), thumb_y), bounds: None },
+            Area {
+                offset: (r[0] + r[2] - t.px(8.0), thumb_y),
+                bounds: None,
+            },
             Item::Shape(Shape {
                 shape: ShapeType::RoundedRectangle(0.0, (t.px(4.0), thumb_h), 0.0, t.px(2.0)),
                 color: theme::SCROLLBAR,
@@ -136,7 +182,10 @@ impl Ui {
 
     pub fn tooltip(&mut self, trigger_rect: Rect, label: &str) {
         if self.is_hovered(trigger_rect) {
-            self.tooltip = Some(PendingTooltip { rect: trigger_rect, label: label.to_string() });
+            self.tooltip = Some(PendingTooltip {
+                rect: trigger_rect,
+                label: label.to_string(),
+            });
         }
     }
 }

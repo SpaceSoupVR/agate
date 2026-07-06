@@ -1,12 +1,3 @@
-//! `Ui` is an immediate-mode widget layer: call `begin_frame`, draw widgets
-//! (each call both draws and returns any interaction that happened), then
-//! `finish()` to get the flat `(Area, Item)` list to hand to the renderer.
-//!
-//! Split into sibling modules by widget family — `buttons`, `sliders`,
-//! `text_input`, `dropdown_scroll` — all as `impl Ui` blocks here in
-//! `mod.rs`. Shared draw-primitive helpers (`push_rect`, `push_rrect`, …)
-//! live in `draw.rs`.
-
 mod buttons;
 mod draw;
 mod dropdown_scroll;
@@ -97,7 +88,9 @@ impl Ui {
         self.tooltip = None;
         self.elapsed += input.dt;
 
-        if input.left_just_released() { self.drag_owner = None; }
+        if input.left_just_released() {
+            self.drag_owner = None;
+        }
     }
 
     pub fn finish(&mut self) -> Vec<(Area, Item)> {
@@ -115,12 +108,22 @@ impl Ui {
         let bw = text_w + pad * 2.0;
         let bh = t.px(theme::FIELD_H);
 
-        let mx = (tt.rect[0] + tt.rect[2] * 0.5 - bw * 0.5)
-            .clamp(0.0, (self.win_w - bw).max(0.0));
+        let mx = (tt.rect[0] + tt.rect[2] * 0.5 - bw * 0.5).clamp(0.0, (self.win_w - bw).max(0.0));
         let my = (tt.rect[1] - bh - t.px(6.0)).max(0.0);
 
-        push_rrect(&mut self.items, [mx, my, bw, bh], t.px(theme::CORNER_SM), theme::SURFACE_RAISED);
-        push_border(&mut self.items, [mx, my, bw, bh], t.px(theme::CORNER_SM), theme::BORDER, t.px(1.0));
+        push_rrect(
+            &mut self.items,
+            [mx, my, bw, bh],
+            t.px(theme::CORNER_SM),
+            theme::SURFACE_RAISED,
+        );
+        push_border(
+            &mut self.items,
+            [mx, my, bw, bh],
+            t.px(theme::CORNER_SM),
+            theme::BORDER,
+            t.px(1.0),
+        );
         self.push_label(
             (mx + pad, my + (bh - font_px) * 0.5),
             &tt.label,
@@ -152,20 +155,28 @@ impl Ui {
     ) {
         let span = Span::new(text.to_string(), self.font.clone(), size_px, color).with_align(align);
         self.items.push((
-            Area { offset, bounds: clip },
+            Area {
+                offset,
+                bounds: clip,
+            },
             Item::Text(Text::new(vec![span], max_w.max(1.0))),
         ));
     }
 
     pub(crate) fn push_center_label(&mut self, r: Rect, text: &str, size_px: f32, color: Color) {
-        let text_w: f32 = text.chars()
+        let text_w: f32 = text
+            .chars()
             .map(|c| self.font.metrics(c, size_px).advance_width)
             .sum();
         let x = r[0] + (r[2] - text_w) * 0.5;
         let y = r[1] + (r[3] - size_px) * 0.5;
-        let span = Span::new(text.to_string(), self.font.clone(), size_px, color).with_align(Align::Left);
+        let span =
+            Span::new(text.to_string(), self.font.clone(), size_px, color).with_align(Align::Left);
         self.items.push((
-            Area { offset: (x, y), bounds: Some((r[0], r[1], r[0] + r[2], r[1] + r[3])) },
+            Area {
+                offset: (x, y),
+                bounds: Some((r[0], r[1], r[0] + r[2], r[1] + r[3])),
+            },
             Item::Text(Text::new(vec![span], r[2].max(text_w + 1.0))),
         ));
     }
@@ -179,9 +190,6 @@ impl Ui {
         push_rrect(&mut self.items, r, radius, color);
     }
 
-    /// Like `panel`, but clamped to `clip` (when given) — used for panels
-    /// inside a scrollable area, where a row near the container's edge must
-    /// not paint over whatever sits just outside it.
     pub fn panel_clipped(&mut self, r: Rect, color: Color, clip: Option<Rect>) {
         let radius = self.theme.px(theme::CORNER);
         push_rrect_clipped(&mut self.items, r, radius, color, clip);
@@ -190,21 +198,36 @@ impl Ui {
     pub fn card(&mut self, r: Rect) {
         let t = &self.theme;
         push_rrect(&mut self.items, r, t.px(theme::CORNER_LG), theme::SURFACE);
-        push_border(&mut self.items, r, t.px(theme::CORNER_LG), theme::BORDER, t.px(1.0));
+        push_border(
+            &mut self.items,
+            r,
+            t.px(theme::CORNER_LG),
+            theme::BORDER,
+            t.px(1.0),
+        );
     }
 
-    /// Like `card`, but with a caller-chosen fill color instead of the fixed
-    /// `SURFACE` — fill and border share `CORNER_LG` so they align exactly,
-    /// unlike combining `panel` (smaller `CORNER` radius) with `card_border`.
     pub fn panel_bordered(&mut self, r: Rect, color: Color) {
         let t = &self.theme;
         push_rrect(&mut self.items, r, t.px(theme::CORNER_LG), color);
-        push_border(&mut self.items, r, t.px(theme::CORNER_LG), theme::BORDER, t.px(1.0));
+        push_border(
+            &mut self.items,
+            r,
+            t.px(theme::CORNER_LG),
+            theme::BORDER,
+            t.px(1.0),
+        );
     }
 
     pub fn card_border(&mut self, r: Rect) {
         let t = &self.theme;
-        push_border(&mut self.items, r, t.px(theme::CORNER_LG), theme::BORDER, t.px(1.0));
+        push_border(
+            &mut self.items,
+            r,
+            t.px(theme::CORNER_LG),
+            theme::BORDER,
+            t.px(1.0),
+        );
     }
 
     pub fn separator(&mut self, x: f32, y: f32, width: f32) {
@@ -218,17 +241,34 @@ impl Ui {
     }
 
     pub fn label(&mut self, x: f32, y: f32, text: &str) {
-        self.label_styled(x, y, text, self.theme.body(), theme::TEXT_PRIMARY, self.win_w - x, None);
+        self.label_styled(
+            x,
+            y,
+            text,
+            self.theme.body(),
+            theme::TEXT_PRIMARY,
+            self.win_w - x,
+            None,
+        );
     }
 
     pub fn label_secondary(&mut self, x: f32, y: f32, text: &str) {
         let size = self.theme.small();
-        self.label_styled(x, y, text, size, theme::TEXT_SECONDARY, self.win_w - x, None);
+        self.label_styled(
+            x,
+            y,
+            text,
+            size,
+            theme::TEXT_SECONDARY,
+            self.win_w - x,
+            None,
+        );
     }
 
     pub fn label_styled(
         &mut self,
-        x: f32, y: f32,
+        x: f32,
+        y: f32,
         text: &str,
         size_px: f32,
         color: Color,

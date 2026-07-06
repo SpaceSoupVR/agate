@@ -3,7 +3,9 @@ use space_soup::ui2d::Align;
 use crate::text_editor::TextEditor;
 use crate::theme;
 
-use super::draw::{byte_idx_of, char_index_for_x, push_border, push_rect, push_rrect, text_advance_width};
+use super::draw::{
+    byte_idx_of, char_index_for_x, push_border, push_rect, push_rrect, text_advance_width,
+};
 use super::{in_rect, Rect, Ui, WidgetId};
 
 impl Ui {
@@ -19,7 +21,9 @@ impl Ui {
 
         {
             let st = self.state.entry(id).or_default();
-            if st.text.is_none() { st.text = Some(value.to_string()); }
+            if st.text.is_none() {
+                st.text = Some(value.to_string());
+            }
         }
 
         if self.input.left_just_pressed() {
@@ -42,13 +46,26 @@ impl Ui {
 
         let focused = self.focused == Some(id);
 
-        let border_color = if focused { theme::FIELD_FOCUS } else { theme::FIELD_BORDER };
+        let border_color = if focused {
+            theme::FIELD_FOCUS
+        } else {
+            theme::FIELD_BORDER
+        };
         push_rrect(&mut self.items, r, t.px(theme::CORNER_SM), theme::FIELD_BG);
-        push_border(&mut self.items, r, t.px(theme::CORNER_SM), border_color, t.px(1.0));
+        push_border(
+            &mut self.items,
+            r,
+            t.px(theme::CORNER_SM),
+            border_color,
+            t.px(1.0),
+        );
 
         let mut changed = false;
         if focused {
-            let new_chars: String = self.input.text.chars()
+            let new_chars: String = self
+                .input
+                .text
+                .chars()
                 .filter(|c| !c.is_control())
                 .collect();
             if !new_chars.is_empty() {
@@ -67,8 +84,11 @@ impl Ui {
                         let mut probe = candidate.clone();
                         let probe_at = byte_idx_of(&probe, cur + accepted.chars().count());
                         probe.insert(probe_at, ch);
-                        let w = text_advance_width(&probe, probe.chars().count(), &self.font, size_px);
-                        if w > usable_w { break; }
+                        let w =
+                            text_advance_width(&probe, probe.chars().count(), &self.font, size_px);
+                        if w > usable_w {
+                            break;
+                        }
                         candidate = probe;
                         accepted.push(ch);
                     }
@@ -105,10 +125,20 @@ impl Ui {
                                 changed = true;
                             }
                         }
-                        ArrowLeft => { if st.text_cursor > 0 { st.text_cursor -= 1; } }
-                        ArrowRight => { st.text_cursor = (st.text_cursor + 1).min(txt.chars().count()); }
-                        Home => { st.text_cursor = 0; }
-                        End => { st.text_cursor = txt.chars().count(); }
+                        ArrowLeft => {
+                            if st.text_cursor > 0 {
+                                st.text_cursor -= 1;
+                            }
+                        }
+                        ArrowRight => {
+                            st.text_cursor = (st.text_cursor + 1).min(txt.chars().count());
+                        }
+                        Home => {
+                            st.text_cursor = 0;
+                        }
+                        End => {
+                            st.text_cursor = txt.chars().count();
+                        }
                         _ => {}
                     }
                 }
@@ -157,12 +187,7 @@ impl Ui {
         }
     }
 
-    pub fn text_editor(
-        &mut self,
-        r: Rect,
-        editor: &mut TextEditor,
-        focused: bool,
-    ) -> bool {
+    pub fn text_editor(&mut self, r: Rect, editor: &mut TextEditor, focused: bool) -> bool {
         let blink = (self.elapsed * 1.6) as u64 % 2 == 0;
         editor.build_items(
             (r[0], r[1], r[2], r[3]),
@@ -173,11 +198,6 @@ impl Ui {
             &mut self.items,
         );
 
-        // Horizontal scrollbar: click or drag anywhere on its track jumps
-        // `scroll_col` proportionally. Checked (and returns early) before the
-        // text-body click/drag below, since the track sits inside `r`'s
-        // bottom strip and would otherwise also be treated as a click in the
-        // text body, moving the caret instead of scrolling.
         if let Some(h) = editor.last_hscroll {
             let track = [h.track_x, h.bar_y, h.track_w, h.bar_h];
             if (self.input.left_just_pressed() || self.input.left_held())
@@ -201,10 +221,8 @@ impl Ui {
         }
         if self.is_hovered(r) && self.input.scroll_y.abs() > 0.01 {
             if self.input.shift {
-                // Shift+scroll → horizontal
                 editor.scroll_by_cols(self.input.scroll_y as i32);
             } else {
-                // Normal scroll → vertical
                 editor.scroll_by_rows(self.input.scroll_y as i32);
             }
         }

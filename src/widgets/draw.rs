@@ -12,10 +12,21 @@ pub(crate) fn push_rect(items: &mut Vec<(Area, Item)>, r: Rect, color: Color) {
     push_rect_clipped(items, r, color, None);
 }
 
-pub(crate) fn push_rect_clipped(items: &mut Vec<(Area, Item)>, r: Rect, color: Color, clip: Option<Rect>) {
+pub(crate) fn push_rect_clipped(
+    items: &mut Vec<(Area, Item)>,
+    r: Rect,
+    color: Color,
+    clip: Option<Rect>,
+) {
     items.push((
-        Area { offset: (r[0], r[1]), bounds: to_bounds(clip) },
-        Item::Shape(Shape { shape: ShapeType::Rectangle(0.0, (r[2], r[3]), 0.0), color }),
+        Area {
+            offset: (r[0], r[1]),
+            bounds: to_bounds(clip),
+        },
+        Item::Shape(Shape {
+            shape: ShapeType::Rectangle(0.0, (r[2], r[3]), 0.0),
+            color,
+        }),
     ));
 }
 
@@ -23,37 +34,89 @@ pub(crate) fn push_rrect(items: &mut Vec<(Area, Item)>, r: Rect, radius: f32, co
     push_rrect_clipped(items, r, radius, color, None);
 }
 
-pub(crate) fn push_rrect_clipped(items: &mut Vec<(Area, Item)>, r: Rect, radius: f32, color: Color, clip: Option<Rect>) {
+pub(crate) fn push_rrect_clipped(
+    items: &mut Vec<(Area, Item)>,
+    r: Rect,
+    radius: f32,
+    color: Color,
+    clip: Option<Rect>,
+) {
     items.push((
-        Area { offset: (r[0], r[1]), bounds: to_bounds(clip) },
-        Item::Shape(Shape { shape: ShapeType::RoundedRectangle(0.0, (r[2], r[3]), 0.0, radius), color }),
+        Area {
+            offset: (r[0], r[1]),
+            bounds: to_bounds(clip),
+        },
+        Item::Shape(Shape {
+            shape: ShapeType::RoundedRectangle(0.0, (r[2], r[3]), 0.0, radius),
+            color,
+        }),
     ));
 }
 
-pub(crate) fn push_border(items: &mut Vec<(Area, Item)>, r: Rect, radius: f32, color: Color, stroke: f32) {
+pub(crate) fn push_border(
+    items: &mut Vec<(Area, Item)>,
+    r: Rect,
+    radius: f32,
+    color: Color,
+    stroke: f32,
+) {
     push_border_clipped(items, r, radius, color, stroke, None);
 }
 
-pub(crate) fn push_border_clipped(items: &mut Vec<(Area, Item)>, r: Rect, radius: f32, color: Color, stroke: f32, clip: Option<Rect>) {
+pub(crate) fn push_border_clipped(
+    items: &mut Vec<(Area, Item)>,
+    r: Rect,
+    radius: f32,
+    color: Color,
+    stroke: f32,
+    clip: Option<Rect>,
+) {
     items.push((
-        Area { offset: (r[0], r[1]), bounds: to_bounds(clip) },
-        Item::Shape(Shape { shape: ShapeType::RoundedRectangle(stroke, (r[2], r[3]), 0.0, radius), color }),
+        Area {
+            offset: (r[0], r[1]),
+            bounds: to_bounds(clip),
+        },
+        Item::Shape(Shape {
+            shape: ShapeType::RoundedRectangle(stroke, (r[2], r[3]), 0.0, radius),
+            color,
+        }),
     ));
 }
 
-pub(crate) fn push_ellipse_outline(items: &mut Vec<(Area, Item)>, r: Rect, stroke: f32, color: Color) {
+pub(crate) fn push_ellipse_outline(
+    items: &mut Vec<(Area, Item)>,
+    r: Rect,
+    stroke: f32,
+    color: Color,
+) {
     items.push((
-        Area { offset: (r[0], r[1]), bounds: None },
-        Item::Shape(Shape { shape: ShapeType::Ellipse(stroke, (r[2], r[3]), 0.0), color }),
+        Area {
+            offset: (r[0], r[1]),
+            bounds: None,
+        },
+        Item::Shape(Shape {
+            shape: ShapeType::Ellipse(stroke, (r[2], r[3]), 0.0),
+            color,
+        }),
     ));
 }
 
 pub(crate) fn push_ellipse_outline_rotated(
-    items: &mut Vec<(Area, Item)>, r: Rect, stroke: f32, color: Color, angle_deg: f32,
+    items: &mut Vec<(Area, Item)>,
+    r: Rect,
+    stroke: f32,
+    color: Color,
+    angle_deg: f32,
 ) {
     items.push((
-        Area { offset: (r[0], r[1]), bounds: None },
-        Item::Shape(Shape { shape: ShapeType::Ellipse(stroke, (r[2], r[3]), angle_deg), color }),
+        Area {
+            offset: (r[0], r[1]),
+            bounds: None,
+        },
+        Item::Shape(Shape {
+            shape: ShapeType::Ellipse(stroke, (r[2], r[3]), angle_deg),
+            color,
+        }),
     ));
 }
 
@@ -75,7 +138,8 @@ pub(crate) fn byte_idx_of(s: &str, col: usize) -> usize {
 }
 
 pub(crate) fn text_advance_width(s: &str, up_to_col: usize, font: &Font, size_px: f32) -> f32 {
-    s.chars().take(up_to_col)
+    s.chars()
+        .take(up_to_col)
         .map(|c| font.metrics(c, size_px).advance_width)
         .sum()
 }

@@ -7,12 +7,17 @@ pub(crate) struct Snapshot {
 
 impl TextEditor {
     fn snapshot(&self) -> Snapshot {
-        Snapshot { lines: self.lines.clone(), cursor: self.cursor }
+        Snapshot {
+            lines: self.lines.clone(),
+            cursor: self.cursor,
+        }
     }
 
     pub(crate) fn push_undo(&mut self) {
         self.undo.push(self.snapshot());
-        if self.undo.len() > 200 { self.undo.remove(0); }
+        if self.undo.len() > 200 {
+            self.undo.remove(0);
+        }
         self.redo.clear();
     }
 
