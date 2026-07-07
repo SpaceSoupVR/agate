@@ -139,6 +139,12 @@ impl Ui {
         in_rect(self.input.mouse_pos, r)
     }
 
+    /// True while any text input widget has keyboard focus. Lets callers
+    /// suppress single-key hotkeys (Space, Delete, ...) while the user types.
+    pub fn text_focused(&self) -> bool {
+        self.focused.is_some()
+    }
+
     pub(crate) fn just_clicked(&self, r: Rect) -> bool {
         self.input.left_just_released() && in_rect(self.input.mouse_pos, r)
     }

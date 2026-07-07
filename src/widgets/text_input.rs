@@ -21,8 +21,13 @@ impl Ui {
 
         {
             let st = self.state.entry(id).or_default();
-            if st.text.is_none() {
+            // Seed on first use; while unfocused, keep the internal copy in
+            // sync with the caller's value so the widget reflects selection
+            // changes (e.g. switching which item is being renamed).
+            let stale = st.text.as_deref() != Some(value);
+            if st.text.is_none() || (!was_focused && stale) {
                 st.text = Some(value.to_string());
+                st.text_cursor = st.text_cursor.min(value.chars().count());
             }
         }
 
