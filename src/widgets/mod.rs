@@ -16,7 +16,7 @@ use draw::{push_border, push_rect, push_rrect, push_rrect_clipped};
 
 pub type Rect = [f32; 4];
 
-pub(crate) fn in_rect(p: (f32, f32), r: Rect) -> bool {
+pub fn in_rect(p: (f32, f32), r: Rect) -> bool {
     p.0 >= r[0] && p.0 <= r[0] + r[2] && p.1 >= r[1] && p.1 <= r[1] + r[3]
 }
 
