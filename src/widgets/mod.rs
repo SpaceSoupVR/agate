@@ -20,6 +20,22 @@ pub(crate) fn in_rect(p: (f32, f32), r: Rect) -> bool {
     p.0 >= r[0] && p.0 <= r[0] + r[2] && p.1 >= r[1] && p.1 <= r[1] + r[3]
 }
 
+/// Overlap of two (x, y, w, h) rects. A zero (or negative) size means they
+/// don't overlap — fine for clipping, since nothing then passes the bounds test.
+fn intersect_rect(a: Rect, b: Rect) -> Rect {
+    let x = a[0].max(b[0]);
+    let y = a[1].max(b[1]);
+    let w = (a[0] + a[2]).min(b[0] + b[2]) - x;
+    let h = (a[1] + a[3]).min(b[1] + b[3]) - y;
+    [x, y, w.max(0.0), h.max(0.0)]
+}
+
+/// Same as [`intersect_rect`] for `Area.bounds` tuples `(x, y, w, h)`.
+fn intersect_bounds(a: (f32, f32, f32, f32), b: (f32, f32, f32, f32)) -> (f32, f32, f32, f32) {
+    let r = intersect_rect([a.0, a.1, a.2, a.3], [b.0, b.1, b.2, b.3]);
+    (r[0], r[1], r[2], r[3])
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct WidgetId(pub u64);
 
@@ -61,6 +77,12 @@ pub struct Ui {
     pub(crate) focused: Option<WidgetId>,
     pub(crate) elapsed: f32,
     pub(crate) tooltip: Option<PendingTooltip>,
+    /// Open clip scopes. Each entry is `(first item index in the scope, clip
+    /// rect in (x, y, w, h))`. `clip` below is their running intersection.
+    clip_scopes: Vec<(usize, Rect)>,
+    /// Intersection of every open clip scope (`None` = unclipped). Used to
+    /// hit-test: a widget scrolled outside the panel is both hidden and inert.
+    clip: Option<Rect>,
 }
 
 impl Ui {
@@ -77,7 +99,54 @@ impl Ui {
             focused: None,
             elapsed: 0.0,
             tooltip: None,
+            clip_scopes: Vec::new(),
+            clip: None,
         }
+    }
+
+    /// Confine everything drawn until the matching `pop_clip` to `r` (an
+    /// (x, y, w, h) rect, e.g. a scroll panel). Scopes nest — the effective clip
+    /// is their intersection — and both hide and disable widgets outside it.
+    pub fn push_clip(&mut self, r: Rect) {
+        self.clip_scopes.push((self.items.len(), r));
+        self.clip = Some(match self.clip {
+            Some(c) => intersect_rect(c, r),
+            None => r,
+        });
+    }
+
+    /// Close the most recent clip scope, intersecting every item drawn inside it
+    /// with the scope rect so none of it can escape the region. `Area.bounds` is
+    /// (x, y, w, h); an item with no bounds of its own simply takes the scope's.
+    pub fn pop_clip(&mut self) {
+        let Some((start, r)) = self.clip_scopes.pop() else {
+            return;
+        };
+        let scope = (r[0], r[1], r[2], r[3]);
+        for (area, _) in self.items[start..].iter_mut() {
+            area.bounds = Some(match area.bounds {
+                Some(b) => intersect_bounds(b, scope),
+                None => scope,
+            });
+        }
+        // Rebuild the running clip from whatever scopes remain open.
+        self.clip = self
+            .clip_scopes
+            .iter()
+            .map(|(_, r)| *r)
+            .reduce(intersect_rect);
+    }
+
+    /// The help label of whatever `tooltip`-registered widget is hovered this
+    /// frame, if any. Lets a caller render the hint in a fixed info box instead
+    /// of the floating popup — pair with `clear_tooltip` to suppress the popup.
+    pub fn hovered_hint(&self) -> Option<String> {
+        self.tooltip.as_ref().map(|t| t.label.clone())
+    }
+
+    /// Drop the pending floating tooltip so `finish` won't draw it.
+    pub fn clear_tooltip(&mut self) {
+        self.tooltip = None;
     }
 
     pub fn begin_frame(&mut self, win_w: f32, win_h: f32, input: &UiInput) {
@@ -86,6 +155,8 @@ impl Ui {
         self.input = input.clone();
         self.items.clear();
         self.tooltip = None;
+        self.clip_scopes.clear();
+        self.clip = None;
         self.elapsed += input.dt;
 
         if input.left_just_released() {
@@ -135,8 +206,16 @@ impl Ui {
         );
     }
 
+    /// Whether the pointer is inside the active clip region (always true when
+    /// unclipped). A widget scrolled out of a `push_clip` panel is hidden, so it
+    /// must not react to hover/clicks either — otherwise it would steal input
+    /// from whatever is drawn in its place (e.g. the bar above the panel).
+    pub(crate) fn pointer_in_clip(&self) -> bool {
+        self.clip.map_or(true, |c| in_rect(self.input.mouse_pos, c))
+    }
+
     pub fn is_hovered(&self, r: Rect) -> bool {
-        in_rect(self.input.mouse_pos, r)
+        in_rect(self.input.mouse_pos, r) && self.pointer_in_clip()
     }
 
     /// True while any text input widget has keyboard focus. Lets callers
@@ -146,7 +225,7 @@ impl Ui {
     }
 
     pub(crate) fn just_clicked(&self, r: Rect) -> bool {
-        self.input.left_just_released() && in_rect(self.input.mouse_pos, r)
+        self.input.left_just_released() && in_rect(self.input.mouse_pos, r) && self.pointer_in_clip()
     }
 
     pub(crate) fn push_label(
@@ -181,7 +260,9 @@ impl Ui {
         self.items.push((
             Area {
                 offset: (x, y),
-                bounds: Some((r[0], r[1], r[0] + r[2], r[1] + r[3])),
+                // (x, y, w, h) — the button rect. Any active clip scope is
+                // applied to this (and every item) when the scope closes.
+                bounds: Some((r[0], r[1], r[2], r[3])),
             },
             Item::Text(Text::new(vec![span], r[2].max(text_w + 1.0))),
         ));
@@ -281,7 +362,8 @@ impl Ui {
         max_w: f32,
         clip: Option<Rect>,
     ) {
-        let bounds = clip.map(|r| (r[0], r[1], r[0] + r[2], r[1] + r[3]));
+        // `Area.bounds` is (x, y, w, h) — hand the clip rect over unchanged.
+        let bounds = clip.map(|r| (r[0], r[1], r[2], r[3]));
         self.push_label((x, y), text, size_px, color, Align::Left, max_w, bounds);
     }
 

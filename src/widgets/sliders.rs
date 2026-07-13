@@ -62,10 +62,14 @@ impl Ui {
             thumb_color,
         );
 
+        let press_in_clip = self.pointer_in_clip();
         let st = self.state.entry(id).or_default();
         let mut new_val = None;
 
-        if self.input.left_just_pressed() && super::in_rect(self.input.mouse_pos, r) {
+        if self.input.left_just_pressed()
+            && super::in_rect(self.input.mouse_pos, r)
+            && press_in_clip
+        {
             self.drag_owner = Some(id);
             st.slider_drag = Some((value, self.input.mouse_pos.0));
         }

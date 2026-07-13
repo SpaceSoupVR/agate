@@ -4,8 +4,12 @@ use super::Rect;
 
 type ClipBounds = Option<(f32, f32, f32, f32)>;
 
+/// The renderer (`space_soup` `ui2d::renderer::vertex`) reads `Area.bounds` as
+/// `(x, y, width, height)` — it derives the far corner via `x + width`,
+/// `y + height`. So a clip rect must be handed over *as-is*, not converted to a
+/// (left, top, right, bottom) corner pair.
 fn to_bounds(clip: Option<Rect>) -> ClipBounds {
-    clip.map(|r| (r[0], r[1], r[0] + r[2], r[1] + r[3]))
+    clip.map(|r| (r[0], r[1], r[2], r[3]))
 }
 
 pub(crate) fn push_rect(items: &mut Vec<(Area, Item)>, r: Rect, color: Color) {
