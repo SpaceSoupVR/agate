@@ -32,7 +32,7 @@ impl Ui {
         }
 
         if self.input.left_just_pressed() {
-            if in_rect(self.input.mouse_pos, r) {
+            if in_rect(self.input.mouse_pos, r) && self.pointer_in_clip() {
                 self.focused = Some(id);
 
                 let pad = t.px(theme::PAD_SM);
