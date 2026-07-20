@@ -149,6 +149,13 @@ impl Ui {
         self.tooltip = None;
     }
 
+    /// True while a draggable widget (slider, drag-float) is actively held.
+    /// Callers use this to coalesce a whole drag into a single undo entry
+    /// instead of one per frame.
+    pub fn is_dragging(&self) -> bool {
+        self.drag_owner.is_some()
+    }
+
     pub fn begin_frame(&mut self, win_w: f32, win_h: f32, input: &UiInput) {
         self.win_w = win_w;
         self.win_h = win_h;
@@ -304,6 +311,14 @@ impl Ui {
             theme::BORDER,
             t.px(1.0),
         );
+    }
+
+    /// Like `panel_bordered` but with square corners — for panels flush against
+    /// the window edge, where a rounded corner would leave a notch.
+    pub fn panel_bordered_flat(&mut self, r: Rect, color: Color) {
+        let t = &self.theme;
+        push_rrect(&mut self.items, r, 0.0, color);
+        push_border(&mut self.items, r, 0.0, theme::BORDER, t.px(1.0));
     }
 
     pub fn card_border(&mut self, r: Rect) {
