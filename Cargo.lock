@@ -3098,7 +3098,6 @@ dependencies = [
  "rhai",
  "serde",
  "serde_json",
- "space_soup",
  "space_soup_protocol",
 ]
 
