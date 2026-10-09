@@ -124,19 +124,6 @@ pub(crate) fn push_ellipse_outline_rotated(
     ));
 }
 
-pub(crate) fn brighten_color(c: Color, factor: f32) -> Color {
-    Color(
-        (c.0 as f32 * factor).min(255.0) as u8,
-        (c.1 as f32 * factor).min(255.0) as u8,
-        (c.2 as f32 * factor).min(255.0) as u8,
-        c.3,
-    )
-}
-
-pub(crate) fn dim_color(c: Color, factor: f32) -> Color {
-    brighten_color(c, factor)
-}
-
 pub(crate) fn byte_idx_of(s: &str, col: usize) -> usize {
     s.char_indices().nth(col).map(|(i, _)| i).unwrap_or(s.len())
 }

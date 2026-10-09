@@ -2,9 +2,7 @@ use space_soup::ui2d::{Align, Color};
 
 use crate::theme;
 
-use super::draw::{
-    brighten_color, dim_color, push_border, push_rect, push_rect_clipped, push_rrect,
-};
+use super::draw::{push_border, push_rect, push_rrect, push_rrect_clipped};
 use super::{Rect, Ui};
 
 impl Ui {
@@ -30,15 +28,15 @@ impl Ui {
         let pressing = hovered && self.input.left_held();
         let clicked = self.just_clicked(r);
 
-        let bg = if pressing {
-            dim_color(bg, 0.80)
+        let radius = t.px(theme::CORNER);
+        push_rrect(&mut self.items, r, radius, bg);
+        // Hover/press states are alpha overlays rather than RGB scaling, so
+        // they stay visible on the translucent (glass) control colors.
+        if pressing {
+            push_rrect(&mut self.items, r, radius, Color(0, 0, 0, 46));
         } else if hovered {
-            brighten_color(bg, 1.08)
-        } else {
-            bg
-        };
-
-        push_rrect(&mut self.items, r, t.px(theme::CORNER), bg);
+            push_rrect(&mut self.items, r, radius, Color(255, 255, 255, 22));
+        }
         let font_px = t.body();
         self.push_center_label(r, label, font_px, fg);
         clicked
@@ -168,17 +166,19 @@ impl Ui {
     ) -> bool {
         let t = self.theme;
         let hov = self.is_hovered(r);
+        // Apple sidebar row: solid accent capsule when selected, faint wash
+        // on hover, nothing otherwise.
         let bg = if selected {
-            theme::ACCENT_DIM
+            theme::ACCENT
         } else if hov {
-            theme::CONTROL_HOVER
+            Color(255, 255, 255, 16)
         } else {
             Color(0, 0, 0, 0)
         };
-        push_rect_clipped(&mut self.items, r, bg, clip);
+        push_rrect_clipped(&mut self.items, r, t.px(theme::CORNER_SM), bg, clip);
 
         let fg = if selected {
-            theme::ACCENT_HI
+            theme::TEXT_ON_ACCENT
         } else {
             theme::TEXT_PRIMARY
         };
@@ -231,53 +231,70 @@ impl Ui {
     }
 
     pub fn tabs(&mut self, r: Rect, selected: usize, labels: &[&str]) -> Option<usize> {
-        let t = self.theme;
-        push_rect(&mut self.items, r, theme::SURFACE);
+        self.segmented(r, selected, labels)
+    }
 
-        let tab_w = r[2] / labels.len() as f32;
+    /// Apple-style segmented control: a recessed track with one raised chip.
+    /// Pass an out-of-range `selected` for a control with no active segment.
+    /// Returns the newly selected index when a different segment is clicked.
+    pub fn segmented(&mut self, r: Rect, selected: usize, labels: &[&str]) -> Option<usize> {
+        let t = self.theme;
+        let radius = t.px(7.0);
+        push_rrect(&mut self.items, r, radius, theme::CONTROL_ACTIVE);
+
+        let n = labels.len().max(1);
+        let seg_w = r[2] / n as f32;
+        let inset = t.px(2.0);
         let mut result = None;
         for (i, label) in labels.iter().enumerate() {
-            let tab_r = [r[0] + i as f32 * tab_w, r[1], tab_w, r[3]];
+            let seg_r = [r[0] + i as f32 * seg_w, r[1], seg_w, r[3]];
+            let chip = [
+                seg_r[0] + inset,
+                seg_r[1] + inset,
+                seg_r[2] - inset * 2.0,
+                seg_r[3] - inset * 2.0,
+            ];
             let sel = i == selected;
-            let hov = self.is_hovered(tab_r);
-            let bg = if sel {
-                theme::CONTROL_BG
+            let hov = self.is_hovered(seg_r);
+            if sel {
+                push_rrect(&mut self.items, chip, radius - inset, theme::CONTROL_HOVER);
+                push_border(
+                    &mut self.items,
+                    chip,
+                    radius - inset,
+                    Color(255, 255, 255, 26),
+                    t.px(1.0),
+                );
             } else if hov {
-                theme::CONTROL_ACTIVE
-            } else {
-                Color(0, 0, 0, 0)
-            };
-            push_rrect(&mut self.items, tab_r, t.px(theme::CORNER_SM), bg);
+                push_rrect(&mut self.items, chip, radius - inset, Color(255, 255, 255, 12));
+            }
+            // Hairline between two segments only when neither side is the
+            // raised chip, like NSSegmentedControl.
+            if i > 0 && !sel && selected != i - 1 {
+                let sep_inset = t.px(7.0);
+                push_rect(
+                    &mut self.items,
+                    [
+                        seg_r[0],
+                        seg_r[1] + sep_inset,
+                        t.px(1.0),
+                        seg_r[3] - sep_inset * 2.0,
+                    ],
+                    Color(255, 255, 255, 24),
+                );
+            }
 
             let fg = if sel {
                 theme::TEXT_PRIMARY
             } else {
                 theme::TEXT_SECONDARY
             };
-            self.push_center_label(tab_r, label, t.body(), fg);
+            self.push_center_label(seg_r, label, t.body(), fg);
 
-            if sel {
-                push_rect(
-                    &mut self.items,
-                    [
-                        tab_r[0] + t.px(8.0),
-                        tab_r[1] + tab_r[3] - t.px(2.0),
-                        tab_w - t.px(16.0),
-                        t.px(2.0),
-                    ],
-                    theme::ACCENT,
-                );
-            }
-            if self.just_clicked(tab_r) && !sel {
+            if self.just_clicked(seg_r) && !sel {
                 result = Some(i);
             }
         }
-
-        push_rect(
-            &mut self.items,
-            [r[0], r[1] + r[3] - t.px(1.0), r[2], t.px(1.0)],
-            theme::BORDER,
-        );
         result
     }
 }

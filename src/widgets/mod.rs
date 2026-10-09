@@ -36,6 +36,15 @@ fn intersect_bounds(a: (f32, f32, f32, f32), b: (f32, f32, f32, f32)) -> (f32, f
     (r[0], r[1], r[2], r[3])
 }
 
+/// Which edge of a docked panel gets its hairline separator.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DockEdge {
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct WidgetId(pub u64);
 
@@ -224,6 +233,12 @@ impl Ui {
         self.focused.is_some()
     }
 
+    /// True when the left button was released inside `r` this frame — the
+    /// public click test for custom rows and hit areas.
+    pub fn clicked(&self, r: Rect) -> bool {
+        self.just_clicked(r)
+    }
+
     pub(crate) fn just_clicked(&self, r: Rect) -> bool {
         self.input.left_just_released() && in_rect(self.input.mouse_pos, r) && self.pointer_in_clip()
     }
@@ -270,6 +285,20 @@ impl Ui {
 
     pub fn fill(&mut self, r: Rect, color: Color) {
         push_rect(&mut self.items, r, color);
+    }
+
+    /// Opaque docked panel: a flat fill with a hairline separator on the edge
+    /// facing the content it borders (Xcode-style chrome, nothing floats).
+    pub fn panel_docked(&mut self, r: Rect, color: Color, separator_edge: DockEdge) {
+        push_rect(&mut self.items, r, color);
+        let w = self.theme.px(1.0);
+        let sep = match separator_edge {
+            DockEdge::Left => [r[0], r[1], w, r[3]],
+            DockEdge::Right => [r[0] + r[2] - w, r[1], w, r[3]],
+            DockEdge::Top => [r[0], r[1], r[2], w],
+            DockEdge::Bottom => [r[0], r[1] + r[3] - w, r[2], w],
+        };
+        push_rect(&mut self.items, sep, theme::SEPARATOR);
     }
 
     pub fn panel(&mut self, r: Rect, color: Color) {
